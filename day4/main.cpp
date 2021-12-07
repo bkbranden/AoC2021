@@ -4,122 +4,244 @@
 #include <limits>
 #include <vector>
 
-int BIT_LENGTH = 12;
-unsigned int ALL_ONES = 0b111111111111; 
-int TEST_BIT_LENGTH = 5;
+int BOARD_WIDTH = 5;
+int BOARD_HEIGHT = 5;
+
+class Board {
+    public:
+        bool completed;
+        std::vector<std::vector<int>> bingo_board;
+
+        Board(std::vector<int> &board_numbers) {
+            completed = false;
+            bingo_board = std::vector<std::vector<int>> (BOARD_WIDTH, std::vector<int>(BOARD_HEIGHT, 0));
+            for (int i = 0; i < BOARD_HEIGHT; i++){
+                for (int j = 0; j < BOARD_WIDTH; j++){
+                    bingo_board.at(i).at(j) = board_numbers.at((i * 5) + j);
+                }
+            }
+        }
+
+        std::vector<std::vector<int>> getBoard(){
+            return this -> bingo_board;
+        }
+
+        bool crossOff(int number){
+            for (int i = 0; i < BOARD_HEIGHT; i++){
+                for (int j = 0; j < BOARD_WIDTH; j++){
+                    if (this -> bingo_board.at(i).at(j) == number){
+                        this -> bingo_board.at(i).at(j) = -1;
+                        return determineWin(i, j);
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        bool determineWin(int row, int col){
+            bool result_col = true;
+            bool result_row = true;
+            for (int i = 0; i < BOARD_HEIGHT; i++){
+                if (this -> bingo_board.at(i).at(col) != -1){
+                    result_col = false; 
+                }
+            }
+
+            for (int j = 0; j < BOARD_WIDTH; j++){
+                if (this -> bingo_board.at(row).at(j) != -1){
+                    result_row = false; 
+                }
+            }
+            
+            this -> completed = result_col || result_row;
+
+            return result_col || result_row;
+        }
+
+        int calculateSum(){
+            int sum = 0;
+            for (int i = 0; i < BOARD_HEIGHT; i++){
+                for (int j = 0; j < BOARD_WIDTH; j++){
+                    if (this -> bingo_board.at(i).at(j) != -1){
+                        sum += this -> bingo_board.at(i).at(j);
+                    }
+                }
+            }
+            
+            return sum;
+        }
+
+        void prettyPrint(){
+            for (int i = 0; i < BOARD_HEIGHT; i++){
+                for (int j = 0; j < BOARD_WIDTH; j++){
+                    std::cout << this -> bingo_board.at(i).at(j) << " ";
+                }
+                std::cout << "\n";
+            }
+            std::cout << "\n";
+        }
+};
 
 long long solutionPart1() {
     std::ifstream myFile;
     myFile.open("input.txt");
     std::string line = "";
+    int line_count = 0;
 
-    long long gamma_rate = 0;
-    long long epsilon_rate = 0;
-    std::vector<int> bit_accumulator(BIT_LENGTH, 0);
+    std::vector<int> numbers;
+    std::vector<Board *> board_list;
+    std::vector<int> numbers_to_add;
     
     if (myFile.is_open()){
-        while(std::getline(myFile, line)){
-            for (int i = 0; i < BIT_LENGTH; i++){
-                char bit_value = line[i];
-                if (bit_value == '0'){
-                    bit_accumulator.at(i) -= 1;
+        while (std::getline(myFile, line)){
+            if (line_count == 0){
+                std::string delimiter = ",";
+                size_t start = 0;
+                size_t end = line.find(delimiter, start);
+                while (end != std::string::npos){
+                    std::string token = line.substr(start, end);
+                    numbers.push_back(std::stoi(token));
+                    start = end + 1;
+                    end = line.find(delimiter, start);
                 }
-                else {
-                    bit_accumulator.at(i) += 1;
-                }
+                std::string token = line.substr(start, end);
+                numbers.push_back(std::stoi(token));
+                line_count++;
+                continue;
             }
+
+            if (line_count == 1){
+                line_count++;
+                continue;
+            }
+
+            if (line == "" || line == "\n"){
+                Board *b = new Board(numbers_to_add);
+                board_list.push_back(b);
+                numbers_to_add.clear();
+                continue;
+            }
+
+            std::string delimiter = " ";
+            size_t start = 0;
+            size_t end = line.find(delimiter, start);
+            while (end != std::string::npos) {
+                std::string token = line.substr(start, end - start);
+                if (token == " " || token == "" || token == "  "){
+                    start = end + 1;
+                    end = line.find(delimiter, start);
+                    continue;
+                }
+                numbers_to_add.push_back(std::stoi(token));
+                start = end + 1;
+                end = line.find(delimiter, start);
+            }
+            
+            std::string token = line.substr(start, end - start);
+            numbers_to_add.push_back(std::stoi(token));
         }
+
+        Board *b = new Board(numbers_to_add);
+        board_list.push_back(b);
+        numbers_to_add.clear();
+
         myFile.close();
     }
 
-    std::string binary_string = "";
-
-    for (unsigned int i = 0; i < bit_accumulator.size(); i++){
-        if (bit_accumulator.at(i) > 0){
-            binary_string += "1";
-        }
-        else {
-            binary_string += "0";
+    for (unsigned int i = 0; i < numbers.size(); i++){
+        for (unsigned int j = 0; j < board_list.size(); j++){
+           if (board_list.at(j) -> crossOff(numbers.at(i))){
+               return numbers.at(i) * board_list.at(j) -> calculateSum();
+           }
         }
     }
 
-    gamma_rate = std::stoi(binary_string, 0, 2);
-    epsilon_rate = gamma_rate ^ ALL_ONES;
 
-    return gamma_rate * epsilon_rate;
-}
-
-long long recursiveHelper(std::vector<std::string> &arr, unsigned int index, bool tie_one){
-    if (arr.size() <= 1){
-        return std::stoi(arr.at(0), 0, 2);
-    }
-    
-    int maj_value = 0;
-    for (unsigned int i = 0; i < arr.size(); i++) {
-        if (arr.at(i)[index] == '1'){
-            maj_value += 1;
-        }
-        else {
-            maj_value -= 1;
-        }
-    }
-    
-    std::vector<std::string> accumulator;
-
-    if (tie_one) {
-        for (unsigned int i = 0; i < arr.size(); i++){
-            if (maj_value >= 0){
-                if (arr.at(i)[index] == '1'){
-                    accumulator.push_back(arr.at(i));
-                }
-            }
-            else {
-                if (arr.at(i)[index] == '0'){
-                    accumulator.push_back(arr.at(i));
-                }
-            }
-        }
-    }
-    else {
-        for (unsigned int i = 0; i < arr.size(); i++){
-            if (maj_value >= 0){
-                if (arr.at(i)[index] == '0'){
-                    accumulator.push_back(arr.at(i));
-                }
-            }
-            else {
-                if (arr.at(i)[index] == '1'){
-                    accumulator.push_back(arr.at(i));
-                }
-            }
-        }
-    }
-
-    return recursiveHelper(accumulator, index + 1, tie_one);
+    return -1;
 }
 
 long long solutionPart2(){
     std::ifstream myFile;
     myFile.open("input.txt");
     std::string line = "";
+    int line_count = 0;
 
-    long long oxygen_rate  = 0;
-    long long co2_rate = 0;
-    std::vector<std::string> oxygen_list;
-    std::vector<std::string> co2_list;
+    std::vector<int> numbers;
+    std::vector<Board *> board_list;
+    std::vector<int> numbers_to_add;
     
     if (myFile.is_open()){
-        while(std::getline(myFile, line)){
-            oxygen_list.push_back(line);
-            co2_list.push_back(line);
+        while (std::getline(myFile, line)){
+            if (line_count == 0){
+                std::string delimiter = ",";
+                size_t start = 0;
+                size_t end = line.find(delimiter, start);
+                while (end != std::string::npos){
+                    std::string token = line.substr(start, end);
+                    numbers.push_back(std::stoi(token));
+                    start = end + 1;
+                    end = line.find(delimiter, start);
+                }
+                std::string token = line.substr(start, end);
+                numbers.push_back(std::stoi(token));
+                line_count++;
+                continue;
+            }
+
+            if (line_count == 1){
+                line_count++;
+                continue;
+            }
+
+            if (line == "" || line == "\n"){
+                Board *b = new Board(numbers_to_add);
+                board_list.push_back(b);
+                numbers_to_add.clear();
+                continue;
+            }
+
+            std::string delimiter = " ";
+            size_t start = 0;
+            size_t end = line.find(delimiter, start);
+            while (end != std::string::npos) {
+                std::string token = line.substr(start, end - start);
+                if (token == " " || token == "" || token == "  "){
+                    start = end + 1;
+                    end = line.find(delimiter, start);
+                    continue;
+                }
+                numbers_to_add.push_back(std::stoi(token));
+                start = end + 1;
+                end = line.find(delimiter, start);
+            }
+            
+            std::string token = line.substr(start, end - start);
+            numbers_to_add.push_back(std::stoi(token));
         }
+
+        Board *b = new Board(numbers_to_add);
+        board_list.push_back(b);
+        numbers_to_add.clear();
+
         myFile.close();
     }
-    
-    oxygen_rate = recursiveHelper(oxygen_list, 0, true);
-    co2_rate = recursiveHelper(co2_list, 0, false);
 
-    return oxygen_rate * co2_rate; 
+    unsigned int board_wins = 0;
+
+    for (unsigned int i = 0; i < numbers.size(); i++){
+        for (unsigned int j = 0; j < board_list.size(); j++){
+            if (board_list.at(j) -> completed == false && board_list.at(j) -> crossOff(numbers.at(i))){
+                board_wins++;
+                if (board_wins == board_list.size()){
+                    return numbers.at(i) * board_list.at(j) -> calculateSum(); 
+                }
+            }
+        }
+    }
+
+
+    return -1;
 }
 
 int main() {
